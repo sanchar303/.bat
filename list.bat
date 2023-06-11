@@ -22,6 +22,8 @@ goto eof
 set "loc=%cd%"
 
 :calculation
+echo. Running ^(%loc%^). . .
+echo.
 dir "%loc%" /b >list.txt
 setlocal enabledelayedexpansion
 set "index=0"
