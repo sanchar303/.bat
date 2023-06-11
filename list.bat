@@ -2,16 +2,24 @@
 echo.Displays list of file/folder in the given directory.>listHelp.hlp
 echo.>>listHelp.hlp
 echo.	LIST ^[drive:^]^[path^]>>listHelp.hlp
+echo.	LIST ^[drive:^]^[path^]filename>>listHelp.hlp
+echo.               Type in the filename to view source code.>>listHelp.hlp
 echo.>>listHelp.hlp
 echo.Type LIST without parameters to perform default LIST function on current directory. >>listHelp.hlp
 
-if "%1" == "/?" (
-	goto getHelp
-) else if "%1" == "" (
-	goto default
+echo "%1" | find "." >nul
+if errorlevel 1 (
+	if "%1" == "/?" (
+		goto getHelp
+	) else if "%1" == "" (
+		goto default
+	) else (
+		set "loc=%1"
+		goto calculation
+	)
 ) else (
-	set "loc=%1"
-	goto calculation
+	type "%1"
+	goto eof
 )
 
 :getHelp
