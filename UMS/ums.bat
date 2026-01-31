@@ -25,6 +25,10 @@ set "VERSION=3.0 Pro"
 set "loginAttempts=0"
 set "maxAttempts=3"
 
+REM ANSI escape init (for single-line progress bar)
+set "ESC="
+call :initAnsi
+
 REM Initialize system
 call :initSystem
 
@@ -49,7 +53,7 @@ echo.
 echo                               Loading system components...
 echo.
 
-call :progressBar 30
+call :progressBar 150
 timeout /t 1 >nul
 goto menu
 
@@ -187,7 +191,7 @@ if "!password!"=="!storedPass!" (
     call :log "LOGIN" "User !username! logged in successfully"
     call :updateLastLogin "!userFile!"
     call :incrementLogins "!userFile!"
-    call :progressBar 20
+    call :progressBar 30
     goto profile
 ) else (
     set "password="
@@ -317,7 +321,7 @@ echo.
 echo     [✓] Account created successfully!
 echo     [i] Initializing your profile...
 call :log "SIGNUP" "New user registered: !username!"
-call :progressBar 20
+call :progressBar 50
 echo.
 echo     [i] You can now login with your credentials.
 call :pressKey
@@ -355,7 +359,6 @@ for %%F in ("users\*.ini") do (
     if "!userStatus!"=="" set "userStatus=Active"
     if "!lastLogin!"=="" set "lastLogin=Never"
     
-    REM Format output with padding
     set "numPad=!count!   "
     set "userPad=!user!                     "
     set "statusPad=!userStatus!              "
@@ -419,7 +422,6 @@ echo     │  System Log Entries        :  !logCount!            │
 echo     └──────────────────────────────────────────────┘
 echo.
 
-REM Most active user
 set "maxLogins=0"
 set "topUser=None"
 for %%F in ("users\*.ini") do (
@@ -586,7 +588,6 @@ if "!fn!"=="" set "fn=Not set"
 
 color !cc!
 
-REM Show welcome message once per session
 if "!welcomed!"=="0" (
     if "!HAS_WELCOME_VBS!"=="1" (
         cscript //nologo "data\welcome.vbs" "!currentUser!" >nul 2>&1
@@ -1009,7 +1010,7 @@ call :drawBorder
 echo.
 echo                            Shutting down system...
 echo.
-call :progressBar 25
+call :progressBar 50
 echo.
 echo                                  Goodbye!
 echo.
@@ -1022,8 +1023,12 @@ REM ============================================
 REM   HELPER FUNCTIONS
 REM ============================================
 
+:initAnsi
+for /f "delims=" %%E in ('echo prompt $E^| cmd') do set "ESC=%%E"
+exit /b
+
+
 :initSystem
-REM Initialize system on first run
 if not exist "logs\activity.log" (
     break > "logs\activity.log"
     call :log "SYSTEM" "System initialized"
@@ -1032,7 +1037,6 @@ exit /b
 
 
 :log
-REM Log activity to file
 set "logType=%~1"
 set "logMsg=%~2"
 call :getTimestamp logTime
@@ -1041,7 +1045,6 @@ exit /b
 
 
 :getLogCount
-REM Count log entries
 set "%~1=0"
 if exist "logs\activity.log" (
     for /f %%A in ('type "logs\activity.log" ^| find /c /v ""') do set "%~1=%%A"
@@ -1050,14 +1053,12 @@ exit /b
 
 
 :updateLastLogin
-REM Update last login timestamp
 call :getTimestamp loginTime
 call :writeValue "%~1" "lastlogin" "!loginTime!"
 exit /b
 
 
 :incrementLogins
-REM Increment login counter
 call :readValue "%~1" "logincount" currentCount
 if "!currentCount!"=="" set "currentCount=0"
 set /a newCount=!currentCount!+1
@@ -1066,53 +1067,54 @@ exit /b
 
 
 :checkPasswordStrength
-REM Check password strength (basic)
-setlocal
+REM FIXED length counter
+setlocal EnableDelayedExpansion
 set "pwd=%~1"
 set "len=0"
 :lenLoop
-if defined pwd (
-    set "pwd=!pwd:~1!"
-    set /a len+=1
-    goto lenLoop
-)
-
-if !len! LSS 6 (
-    endlocal & set "%~2=Weak"
-    exit /b
-)
-if !len! LSS 10 (
-    endlocal & set "%~2=Medium"
-    exit /b
-)
+if not defined pwd goto lenDone
+set "pwd=!pwd:~1!"
+set /a len+=1
+goto lenLoop
+:lenDone
+if !len! LSS 6  (endlocal & set "%~2=Weak" & exit /b)
+if !len! LSS 10 (endlocal & set "%~2=Medium" & exit /b)
 endlocal & set "%~2=Strong"
 exit /b
 
 
 :progressBar
-REM Display progress bar
-setlocal
+REM FIXED: single-line updating progress bar (no screen spam)
+setlocal EnableDelayedExpansion
 set "total=%~1"
 set "current=0"
-echo.
-echo     Progress: [                              ] 0%%
+set "width=30"
+
+REM Initial render
+set "bars=0"
+set "remaining=%width%"
+set "bar="
+for /l %%i in (1,1,%width%) do set "space=!space! "
+<nul set /p "=%ESC%[2K     Progress: [!space!] 0%%"
+
 :progressLoop
 if !current! GEQ !total! goto progressDone
+
 set /a current+=1
-set /a percent=!current!*100/!total!
-set /a bars=!current!*30/!total!
+set /a percent=current*100/total
+set /a bars=current*width/total
+set /a remaining=width-bars
 
 set "bar="
 for /l %%i in (1,1,!bars!) do set "bar=!bar!█"
 set "space="
-set /a remaining=30-!bars!
 for /l %%i in (1,1,!remaining!) do set "space=!space! "
 
-<nul set /p "=     Progress: [!bar!!space!] !percent!%%"
-timeout /t 0 >nul 2>&1
+<nul set /p "=%ESC%[1G%ESC%[2K     Progress: [!bar!!space!] !percent!%%"
 goto progressLoop
 
 :progressDone
+<nul set /p "=%ESC%[1G%ESC%[2K     Progress: [██████████████████████████████] 100%%"
 echo.
 endlocal
 exit /b
@@ -1131,7 +1133,6 @@ exit /b
 
 
 :trim
-REM Trim whitespace from variable
 set "var=%~1"
 call set "str=%%%var%%%"
 for /f "tokens=* delims= " %%A in ("!str!") do set "%var%=%%A"
@@ -1139,7 +1140,6 @@ exit /b
 
 
 :validateUsername
-REM Validate username: 3-20 chars, alphanumeric plus _ and -
 setlocal
 set "u=%~1"
 if "!u!"=="" (endlocal & exit /b 1)
@@ -1151,7 +1151,6 @@ endlocal & exit /b 0
 
 
 :validatePassword
-REM Validate password: 4-30 chars, allowed special characters
 setlocal
 set "p=%~1"
 if "!p!"=="" (endlocal & exit /b 1)
@@ -1163,26 +1162,24 @@ endlocal & exit /b 0
 
 
 :getTimestamp
-REM Get current date and time
 set "%~1=!date! !time!"
 exit /b
 
 
 :readValue
-REM Read a value from INI file
+REM FIXED: proper output variable assignment
 set "file=%~1"
 set "key=%~2"
 set "outVar=%~3"
-set "!outVar!="
+set "%outVar%="
 for /f "usebackq tokens=1* delims==" %%A in (`findstr /i /b "%key%=" "%file%" 2^>nul`) do (
-    set "!outVar!=%%B"
+    call set "%outVar%=%%B"
     goto :eof
 )
 exit /b
 
 
 :writeValue
-REM Write or update a value in INI file
 setlocal
 set "file=%~1"
 set "key=%~2"
@@ -1193,7 +1190,6 @@ set "found=0"
 break > "!tmp!"
 
 for /f "usebackq delims=" %%L in ("%file%") do (
-    set "line=%%L"
     for /f "tokens=1* delims==" %%A in ("%%L") do (
         if /i "%%A"=="%key%" (
             >>"!tmp!" echo %key%=%value%
@@ -1210,7 +1206,6 @@ endlocal & exit /b
 
 
 :pickColor
-REM Let user pick a theme color
 set "cnVar=%~1"
 set "ccVar=%~2"
 
